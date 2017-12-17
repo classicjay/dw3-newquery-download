@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bonc.dw3.mapper.DownloadMapper">
+
+    <select id="getKpiMapping" resultType="java.util.HashMap">
+        select KPI_CODE,KPI_FULL_NAME from V_DMCODE_COMP_KPI_MAPPING
+    </select>
+    
+    <select id="getProvCode" resultType="java.util.HashMap">
+        select PRO_NAME,PROV_ID from DMCODE_PROVINCE where PROV_ID !='999'
+    </select>
+
+    <select id="getAreaProvCode" resultType="java.util.HashMap">
+        select a.AREA_ID,a.AREA_SHORT_DESC,a.PROV_ID,b.PRO_NAME
+        from DMCODE_AREA a,DMCODE_PROVINCE b where a.PROV_ID=b.PROV_ID order by b.PROV_ID
+    </select>
+
+    <select id="getKpiInfo" parameterType="java.lang.String" resultType="java.util.HashMap">
+        select a.KPI_CODE,a.KPI_FULL_NAME,a.UNIT,a.UATIO from V_DMCODE_COMP_KPI_MAPPING a,DW_NEWQUERY_MODULE_KPI_REL b
+        where 1 = 1 and a.KPI_CODE=b.KPI_CODE
+        <if test="null != moduleId and '' != moduleId">
+            and b.MODULE_CODE = #{moduleId}
+        </if>
+    </select>
+
+</mapper>
