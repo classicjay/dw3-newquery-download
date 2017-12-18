@@ -1,6 +1,7 @@
 package com.bonc.dw3.service;
 
 import com.bonc.dw3.mapper.DownloadMapper;
+import org.apache.commons.lang.StringUtils;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.HorizontalAlignment;
 import org.apache.poi.ss.util.CellRangeAddress;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
 import java.io.*;
+import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -112,9 +114,12 @@ public class DownloadService {
      */
     @PostConstruct
     public void init(){
-        TEMPLATE_FILE_PATH = environment.getProperty("template.file.path");
-        DATA_FILE_PATH = environment.getProperty("data.file.path");
-        EXPORT_PATH = environment.getProperty("export.file.path");
+//        TEMPLATE_FILE_PATH = environment.getProperty("template.file.path");
+//        DATA_FILE_PATH = environment.getProperty("data.file.path");
+//        EXPORT_PATH = environment.getProperty("export.file.path");
+        TEMPLATE_FILE_PATH = "C:/Users/毛/Desktop/template.xlsx";
+        DATA_FILE_PATH = "C:/Users/毛/Desktop/999_copy.txt";
+        EXPORT_PATH = "C:/Users/毛/Desktop/export1.xlsx";
 
         List<HashMap<String,String>> kpiCodeList = downloadMapper.getKpiMapping();
         for (HashMap<String,String> map:kpiCodeList){
@@ -153,9 +158,16 @@ public class DownloadService {
         }
     }
 
+    /**
+     * 传入参数：页签id、账期
+     * @param param
+     * @throws IOException
+     */
     public void generateExcel(HashMap<String,String> param) throws IOException {
 
         String moduleId = param.get("MODULE_CODE");
+        List<String> moduleKpiList = downloadMapper.getModuleKpi(moduleId);
+
         String date = param.get("date");
         //excel模板路径
         File file = new File(TEMPLATE_FILE_PATH);
@@ -169,11 +181,11 @@ public class DownloadService {
         styleCenter.setAlignment(HorizontalAlignment.CENTER);
         //如果这行没有了，整个公式都不会有自动计算的效果
         sheet.setForceFormulaRecalculation(true);
-        //笛卡尔积运算的元素
+        //参与笛卡尔积的元素
         List<List<String>> dimValue = new ArrayList<List<String>>();
-        //笛卡尔积远算结果
+        //笛卡尔积运算结果
         List<List<String>> recursiveResult = new ArrayList<List<String>>();
-
+        //加入地市、三维度
         dimValue.add(PRO_AREA_CODE_UNION_LIST);
         dimValue.add(SERVICE_TYPE_LIST);
         dimValue.add(CHANNEL_TYPE_LIST);
@@ -217,7 +229,7 @@ public class DownloadService {
         }
 
         //保存遍历过程中上一个kpiCode，如果currentKpi与其不匹配，则表示为新指标，另起一列
-        String kpiCode = new String();
+        String tempKpiCode = new String();
         //当前指标对应的列数
         int colNum = 0;
         //每新增一个指标，列数都要+4，即一个指标占4列（当日，本月，同比，环比）
@@ -226,18 +238,20 @@ public class DownloadService {
         List<String> lines = Files.readAllLines(Paths.get(DATA_FILE_PATH), StandardCharsets.UTF_8);
         for (String line:lines){
             String items[] = line.split("\\|",-1);
-            String drz = items[10];
-            String bylj = items[12];
-            String sylj = items[13];
-            String qntq = items[15];
+            //当前数据中的kpiCode
+            String currentKpi = items[9];
+            if(null == KPI_CODE_MAP.get(currentKpi) || "".equals(KPI_CODE_MAP.get(currentKpi))){
+                log.info("kpiCode："+currentKpi+"在码表中查不到");
+                continue;
+            }
+
             //指标名行
             XSSFRow headRow = sheet.getRow(0);
             //字段名行
             XSSFRow fieldRow = sheet.getRow(1);
-            //当前数据中的kpiCode
-            String currentKpi = items[9];
-            //当前currentKpi与kpiCode不匹配
-            if (!kpiCode.equals(currentKpi)){
+
+            //currentKpi与tempKpiCode不匹配
+            if (!tempKpiCode.equals(currentKpi)){
                 //定位到列数
                 colNum =  6 + count*4;
                 //显示指标名称的区域合并并设置居中
@@ -245,9 +259,9 @@ public class DownloadService {
                 sheet.addMergedRegion(cellRangeAddress);
 
                 XSSFCell kpiNameCell = headRow.createCell(colNum);
-                if(null == KPI_CODE_MAP.get(currentKpi) || "".equals(KPI_CODE_MAP.get(currentKpi))){
-                    log.info("kpiCode："+currentKpi+"在码表中查不到");
-                }
+//                if(null == KPI_CODE_MAP.get(currentKpi) || "".equals(KPI_CODE_MAP.get(currentKpi))){
+//                    log.info("kpiCode："+currentKpi+"在码表中查不到");
+//                }
                 kpiNameCell.setCellValue(KPI_CODE_MAP.get(currentKpi));
                 //指标名称单元格设置居中
                 kpiNameCell.setCellStyle(styleCenter);
@@ -256,9 +270,15 @@ public class DownloadService {
                 fieldRow.createCell(colNum+2).setCellValue(MOM_NAME);
                 fieldRow.createCell(colNum+3).setCellValue(YOY_NAME);
                 count++;
-                kpiCode = currentKpi;
-                log.info("kpiCode:"+kpiCode);
+                tempKpiCode = currentKpi;
+                log.info("kpiCode："+tempKpiCode);
             }
+            //当前kpi的指标信息，单位格式等
+            Map<String,Object> kpiInfoMap = downloadMapper.getKpiInfo(tempKpiCode);
+            String dayValue = items[10];
+            String thisMonthValue = items[12];
+            String lastMonthValue = items[14];
+            String lastYearThisMonthValue = items[15];
             StringBuffer stringBuffer = new StringBuffer();
             for (int i=3;i<9;i++){
                 if (i==5){
@@ -272,7 +292,6 @@ public class DownloadService {
                 }
             }
             //TODO 此处指标数据的单位以及格式（保留几位）需要码表，码表从库里拿
-            //TODO 账期作为参数
             //TODO 文件路径
             //定位到行数
             String rowNum = combineMap.get(stringBuffer.toString());
@@ -283,12 +302,12 @@ public class DownloadService {
             }else {
                 //填入数据
                 XSSFRow row = sheet.getRow(Integer.parseInt(rowNum));
-                row.createCell(colNum).setCellValue(drz);
-                row.createCell(colNum+1).setCellValue(bylj);
+                row.createCell(colNum).setCellValue(formatKpiValue(kpiInfoMap,dayValue));
+                row.createCell(colNum+1).setCellValue(formatKpiValue(kpiInfoMap,thisMonthValue));
 //                row.createCell(colNum+2).setCellValue(sylj);
 //                row.createCell(colNum+3).setCellValue(qntq);
-                row.createCell(colNum+2).setCellValue(calculateMoM(bylj,sylj));
-                row.createCell(colNum+3).setCellValue(calculateYoY(bylj,qntq));
+                row.createCell(colNum+2).setCellValue(calculateMoM(thisMonthValue,lastMonthValue));
+                row.createCell(colNum+3).setCellValue(calculateYoY(thisMonthValue,lastYearThisMonthValue));
             }
         }
 
@@ -310,7 +329,7 @@ public class DownloadService {
         DecimalFormat df = new DecimalFormat("######0.00");
         df.setRoundingMode(RoundingMode.HALF_EVEN);
         String result = new String();
-        if (M_TM_VAL.equals("0")||M_LM_VAL.equals("0")||M_TM_VAL.equals("")||M_LM_VAL.equals("")){
+        if (M_TM_VAL.equals("0")||M_LM_VAL.equals("0")||M_TM_VAL.equals("")||M_LM_VAL.equals("")||M_LM_VAL.equals("-")||M_TM_VAL.equals("-")){
             return "-";
         }else {
             Double mtmVal = Double.parseDouble(M_TM_VAL);
@@ -330,7 +349,7 @@ public class DownloadService {
         DecimalFormat df = new DecimalFormat("######0.00");
         df.setRoundingMode(RoundingMode.HALF_EVEN);
         String result = new String();
-        if (M_TM_VAL.equals("0")||M_LY_VAL.equals("0")||M_TM_VAL.equals("")||M_LY_VAL.equals("")){
+        if (M_TM_VAL.equals("0")||M_LY_VAL.equals("0")||M_TM_VAL.equals("")||M_LY_VAL.equals("")||M_LY_VAL.equals("-")||M_TM_VAL.equals("-")){
             return "-";
         }else {
             Double mtmVal = Double.parseDouble(M_TM_VAL);
@@ -389,5 +408,41 @@ public class DownloadService {
             }
         });
         return paramList;
+    }
+
+    /**
+     * 规范指标数值，包括单位、保留位数、是否除以10000等
+     * @param kpiInfoMap
+     * @param value
+     * @return
+     */
+    public static String formatKpiValue(Map<String, Object> kpiInfoMap, String value) {
+        if (value.equals("0")||value.equals("0")||value.equals("")||value.equals("")){
+            return "-";
+        }
+        Double uatio = 1.0;
+        String unit = "";
+        String format = "";
+        if (null != kpiInfoMap.get("UATIO")) {
+            //uatio为指标除数，一般为1或者10000（万元、万户类）
+            uatio = ((BigDecimal) kpiInfoMap.get("UATIO")).doubleValue();
+        }
+        if (null != kpiInfoMap.get("FORMAT")) {
+            //指标小数点后保留位数
+            format = (String) kpiInfoMap.get("FORMAT");
+        }
+        DecimalFormat df = new DecimalFormat("###,###,###,##0.00");
+        String result = "";
+        if (null != value) {
+            Double doubleValue = Double.parseDouble(value);
+            if (doubleValue != 0) {
+                if (!StringUtils.isEmpty(format)) {
+                    df = new DecimalFormat(format);
+                    df.setRoundingMode(RoundingMode.HALF_EVEN);
+                }
+                result = df.format(doubleValue/uatio);
+            }
+        }
+        return result;
     }
 }

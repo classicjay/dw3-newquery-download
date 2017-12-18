@@ -5,6 +5,7 @@ import org.apache.ibatis.annotations.Param;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * <p>Title: BONC -  DownloadMapper</p>
@@ -36,9 +37,15 @@ public interface DownloadMapper {
     public List<HashMap<String,String>> getAreaProvCode();
 
     /**
-     * 指标信息
+     * 获取页签id下所有kpiCode
      * @param moduleId
      * @return
      */
-    public List<HashMap<String,String>> getKpiInfo(@Param(value = "moduleId") String moduleId);
+    public List<String> getModuleKpi(@Param(value = "moduleId") String moduleId);
+
+    /**
+     * 获取指标信息
+     * @return
+     */
+    public Map<String,Object> getKpiInfo(@Param(value = "kpiCode") String kpiCode);
 }

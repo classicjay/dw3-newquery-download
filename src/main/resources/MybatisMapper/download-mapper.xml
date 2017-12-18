@@ -15,11 +15,25 @@
         from DMCODE_AREA a,DMCODE_PROVINCE b where a.PROV_ID=b.PROV_ID order by b.PROV_ID
     </select>
 
-    <select id="getKpiInfo" parameterType="java.lang.String" resultType="java.util.HashMap">
-        select a.KPI_CODE,a.KPI_FULL_NAME,a.UNIT,a.UATIO from V_DMCODE_COMP_KPI_MAPPING a,DW_NEWQUERY_MODULE_KPI_REL b
-        where 1 = 1 and a.KPI_CODE=b.KPI_CODE
+    <select id="getModuleKpi" parameterType="java.lang.String" resultType="java.lang.String">
+        <!--select a.KPI_CODE,a.KPI_FULL_NAME,a.UNIT,a.UATIO from V_DMCODE_COMP_KPI_MAPPING a,DW_NEWQUERY_MODULE_KPI_REL b-->
+        <!--where 1 = 1 and a.KPI_CODE=b.KPI_CODE-->
+        <!--<if test="null != moduleId and '' != moduleId">-->
+            <!--and b.MODULE_CODE = #{moduleId}-->
+        <!--</if>-->
+
+        select KPI_CODE from DW_NEWQUERY_MODULE_KPI_REL where 1 = 1
         <if test="null != moduleId and '' != moduleId">
-            and b.MODULE_CODE = #{moduleId}
+            and MODULE_CODE = #{moduleId}
+        </if>
+    </select>
+
+    <!--获取指标信息-->
+    <select id="getKpiInfo" parameterType="java.lang.String" resultType="java.util.HashMap">
+        select t.KPI_FULL_NAME,t.UNIT,t.UATIO,t.FORMAT from DMCODE_COMP_KPI_MAPPING t
+        where 1 = 1
+        <if test="null != kpiCode and kpiCode != ''">
+            and t.KPI_CODE=#{kpiCode}
         </if>
     </select>
 
