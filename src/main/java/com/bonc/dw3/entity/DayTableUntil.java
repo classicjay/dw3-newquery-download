@@ -12,7 +12,7 @@ public class DayTableUntil implements Serializable {
     private String DAY_ID;
     private String ACCT_DATE;
     private String PROV_ID;
-     String AREA_NO;
+    private String AREA_NO;
     private String CITY_NO;
     private String SERVICE_TYPE;
     private String CHANNEL_TYPE;
@@ -357,6 +357,8 @@ public class DayTableUntil implements Serializable {
                 this.getM_LDA_VALUE()==null) {
             return true;
         }
-        else return false;
+        else{
+            return false;
+        }
     }
 }

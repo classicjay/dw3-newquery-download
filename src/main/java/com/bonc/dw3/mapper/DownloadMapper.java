@@ -44,8 +44,19 @@ public interface DownloadMapper {
     public List<String> getModuleKpi(@Param(value = "moduleId") String moduleId);
 
     /**
+     * 获取专题code下所有kpiCode
+     * @param subjectCode
+     * @return
+     */
+    public List<String> getSubjectKpi(@Param(value = "subjectCode") String subjectCode);
+
+    /**
      * 获取指标信息
      * @return
      */
     public Map<String,Object> getKpiInfo(@Param(value = "kpiCode") String kpiCode);
+
+
+
+
 }

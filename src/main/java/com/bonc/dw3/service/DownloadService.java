@@ -1,6 +1,12 @@
 package com.bonc.dw3.service;
 
+import com.bonc.dw3.common.CommonUtils;
+import com.bonc.dw3.entity.DownloadFile;
+import com.bonc.dw3.mapper.DownloadFileMapper;
 import com.bonc.dw3.mapper.DownloadMapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.commons.collections.map.HashedMap;
 import org.apache.commons.lang.StringUtils;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.HorizontalAlignment;
@@ -16,13 +22,14 @@ import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
-import java.io.*;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.text.DecimalFormat;
+import java.text.SimpleDateFormat;
 import java.util.*;
 
 /**
@@ -40,6 +47,9 @@ public class DownloadService {
 
     @Autowired
     DownloadMapper downloadMapper;
+
+    @Autowired
+    DownloadFileMapper downloadFileMapper;
 
     @Autowired
     Environment environment;
@@ -92,6 +102,8 @@ public class DownloadService {
      */
     private static final List<String> PRODUCT_ID_LIST = Arrays.asList(new String[]{"01","02","03","04","99","**","999"});
 
+    private static final List<String> DIMENSION_NAME_LIST = Arrays.asList(new String[]{"2G业务","3G业务","4G业务","其他业务", "2I2C产品","冰激凌套餐","流量王A","日租卡","其他","实体渠道","电子渠道","集团渠道","其他渠道"});
+    private static final String DIMENSION_NAME_STR = "2G业务,3G业务,4G业务,其他业务,2I2C产品,冰激凌套餐,流量王A,日租卡,其他,实体渠道,电子渠道,集团渠道,其他渠道";
     private static final String KPI_CODE_FIELD = "KPI_CODE";
     private static final String KPI_FULL_NAME_FIELD = "KPI_FULL_NAME";
 
@@ -100,9 +112,12 @@ public class DownloadService {
     private static final String PROV_ID_FIELD = "PROV_ID";
     private static final String PRO_NAME_FIELD = "PRO_NAME";
 
+    //模板文件路径
     private static String TEMPLATE_FILE_PATH;
-    private static String DATA_FILE_PATH;
-    private static String EXPORT_PATH;
+    //源数据文件路径
+    private static String SOURCEDATA_FILE_PATH;
+    //导出文件路径
+    private static String EXPORT_FILE_PATH;
 
     private static final String KPI_VALUE_NAME = "当日值";
     private static final String M_TM_VALUE_NAME = "本月累计";
@@ -115,11 +130,12 @@ public class DownloadService {
     @PostConstruct
     public void init(){
 //        TEMPLATE_FILE_PATH = environment.getProperty("template.file.path");
-//        DATA_FILE_PATH = environment.getProperty("data.file.path");
-//        EXPORT_PATH = environment.getProperty("export.file.path");
+//        SOURCEDATA_FILE_PATH = environment.getProperty("sourcedata.file.path");
+//        EXPORT_FILE_PATH = environment.getProperty("export.file.path");
+
         TEMPLATE_FILE_PATH = "C:/Users/毛/Desktop/template.xlsx";
-        DATA_FILE_PATH = "C:/Users/毛/Desktop/999_copy.txt";
-        EXPORT_PATH = "C:/Users/毛/Desktop/export1.xlsx";
+        SOURCEDATA_FILE_PATH = "C:/Users/毛/Desktop/";
+        EXPORT_FILE_PATH = "C:/Users/毛/Desktop/";
 
         List<HashMap<String,String>> kpiCodeList = downloadMapper.getKpiMapping();
         for (HashMap<String,String> map:kpiCodeList){
@@ -159,16 +175,20 @@ public class DownloadService {
     }
 
     /**
-     * 传入参数：页签id、账期
-     * @param param
+     *
+     * @param subjectCode 传入参数：专题code、账期、文件id
+     * @param date
+     * @param fileId
+     * @return 生成文件路径
      * @throws IOException
      */
-    public void generateExcel(HashMap<String,String> param) throws IOException {
+    public String generateExcel(String subjectCode,String date,String fileId) throws IOException {
+        String sourceFilePath = SOURCEDATA_FILE_PATH+date+".txt";
+        Group2Data gd = new Group2Data(sourceFilePath);
+        List<String> subjectKpiList = downloadMapper.getSubjectKpi(subjectCode);
+        log.info("subjectKpiList:"+subjectKpiList);
+        List<String> lines = gd.groupbySth(subjectKpiList);
 
-        String moduleId = param.get("MODULE_CODE");
-        List<String> moduleKpiList = downloadMapper.getModuleKpi(moduleId);
-
-        String date = param.get("date");
         //excel模板路径
         File file = new File(TEMPLATE_FILE_PATH);
         FileInputStream in = new FileInputStream(file);
@@ -235,7 +255,8 @@ public class DownloadService {
         //每新增一个指标，列数都要+4，即一个指标占4列（当日，本月，同比，环比）
         int count = 0;
         //读取数据文件
-        List<String> lines = Files.readAllLines(Paths.get(DATA_FILE_PATH), StandardCharsets.UTF_8);
+//        List<String> lines = Files.readAllLines(Paths.get(DATA_FILE_PATH), StandardCharsets.UTF_8);
+
         for (String line:lines){
             String items[] = line.split("\\|",-1);
             //当前数据中的kpiCode
@@ -244,14 +265,17 @@ public class DownloadService {
                 log.info("kpiCode："+currentKpi+"在码表中查不到");
                 continue;
             }
-
             //指标名行
             XSSFRow headRow = sheet.getRow(0);
             //字段名行
             XSSFRow fieldRow = sheet.getRow(1);
-
+            //当前kpi的指标信息，单位格式等
+            Map<String,Object> kpiInfoMap = new HashedMap();
             //currentKpi与tempKpiCode不匹配
             if (!tempKpiCode.equals(currentKpi)){
+                kpiInfoMap = downloadMapper.getKpiInfo(currentKpi);
+                //指标单位为基础单位，已在sql中判断
+                String kpiUnit = kpiInfoMap.get("UNIT").toString();
                 //定位到列数
                 colNum =  6 + count*4;
                 //显示指标名称的区域合并并设置居中
@@ -259,10 +283,7 @@ public class DownloadService {
                 sheet.addMergedRegion(cellRangeAddress);
 
                 XSSFCell kpiNameCell = headRow.createCell(colNum);
-//                if(null == KPI_CODE_MAP.get(currentKpi) || "".equals(KPI_CODE_MAP.get(currentKpi))){
-//                    log.info("kpiCode："+currentKpi+"在码表中查不到");
-//                }
-                kpiNameCell.setCellValue(KPI_CODE_MAP.get(currentKpi));
+                kpiNameCell.setCellValue(KPI_CODE_MAP.get(currentKpi)+"("+kpiUnit+")");
                 //指标名称单元格设置居中
                 kpiNameCell.setCellStyle(styleCenter);
                 fieldRow.createCell(colNum).setCellValue(KPI_VALUE_NAME);
@@ -272,9 +293,10 @@ public class DownloadService {
                 count++;
                 tempKpiCode = currentKpi;
                 log.info("kpiCode："+tempKpiCode);
+                //当前kpi的指标信息，单位格式等
+
             }
-            //当前kpi的指标信息，单位格式等
-            Map<String,Object> kpiInfoMap = downloadMapper.getKpiInfo(tempKpiCode);
+
             String dayValue = items[10];
             String thisMonthValue = items[12];
             String lastMonthValue = items[14];
@@ -291,8 +313,6 @@ public class DownloadService {
                     stringBuffer.append(items[i]);
                 }
             }
-            //TODO 此处指标数据的单位以及格式（保留几位）需要码表，码表从库里拿
-            //TODO 文件路径
             //定位到行数
             String rowNum = combineMap.get(stringBuffer.toString());
             if (null == rowNum || "".equals(rowNum)){
@@ -310,12 +330,74 @@ public class DownloadService {
                 row.createCell(colNum+3).setCellValue(calculateYoY(thisMonthValue,lastYearThisMonthValue));
             }
         }
-
+        String exportFilePath = EXPORT_FILE_PATH+fileId+".xlsx";
         //导出数据
-        FileOutputStream out = new FileOutputStream(EXPORT_PATH);
+        FileOutputStream out = new FileOutputStream(exportFilePath);
         wb.write(out);
         out.close();
         in.close();
+        return exportFilePath;
+    }
+
+    /**
+     * 下载列表
+     * @param paramMap
+     * @return
+     */
+    public List<DownloadFile> downloadTable(HashMap<String,String> paramMap){
+        List<DownloadFile> fileList = new ArrayList<>();
+        String userId = new String();
+        if (CommonUtils.isNotBlank(paramMap.get("userId"))){
+            userId = paramMap.get("userId");
+        }
+        fileList = downloadFileMapper.getFileByUserId(userId);
+        for (DownloadFile downloadFile:fileList){
+            ObjectMapper objectMapper = new ObjectMapper();
+            String json = new String();
+            try {
+                json = objectMapper.writeValueAsString(downloadFile);
+            } catch (JsonProcessingException e) {
+                e.printStackTrace();
+            }
+            log.info("json:"+json);
+        }
+        return fileList;
+    }
+
+    /**
+     * 导出文件路径
+     * @param paramMap
+     * @return
+     */
+    public String allDataDownload(HashMap<String,String> paramMap){
+        String userId = paramMap.get("userId");
+        String subjectCode = paramMap.get("specialId");//011
+        String date = paramMap.get("date");
+        String fileId = UUID.randomUUID().toString();
+        String subjectName = new String();
+        SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        String currentTime = simpleDateFormat.format(new Date());
+        String exportFilePath = new String();
+        try {
+            exportFilePath = generateExcel(subjectCode,date,fileId);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        subjectName = downloadFileMapper.getSubjectNameByCode(subjectCode);
+
+        DownloadFile downloadFile = new DownloadFile(fileId,exportFilePath,date,subjectName,
+                DIMENSION_NAME_STR,currentTime,String.valueOf(1),userId);
+        downloadFileMapper.addFile(downloadFile);
+        return exportFilePath;
+    }
+
+    public String downloadMaxDate(HashMap<String,String> paramMap){
+        String dateType = paramMap.get("dateType");
+        String markType = paramMap.get("markType");
+        String maxDate = new String();
+        maxDate = downloadFileMapper.getMaxDate(dateType,markType);
+        return maxDate;
+
     }
 
 
@@ -440,7 +522,8 @@ public class DownloadService {
                     df = new DecimalFormat(format);
                     df.setRoundingMode(RoundingMode.HALF_EVEN);
                 }
-                result = df.format(doubleValue/uatio);
+                //下载全部的excel中不需要除以10000，展示基础单位即可，与指标名称后单位保持一致
+                result = df.format(doubleValue);
             }
         }
         return result;

@@ -21,16 +21,24 @@
         <!--<if test="null != moduleId and '' != moduleId">-->
             <!--and b.MODULE_CODE = #{moduleId}-->
         <!--</if>-->
-
         select KPI_CODE from DW_NEWQUERY_MODULE_KPI_REL where 1 = 1
         <if test="null != moduleId and '' != moduleId">
             and MODULE_CODE = #{moduleId}
         </if>
     </select>
 
+    <select id="getSubjectKpi" parameterType="java.lang.String" resultType="java.lang.String">
+        select b.KPI_CODE from DW_NEWQUERY_SUBJECT_MODULE_REL a,DW_NEWQUERY_MODULE_KPI_REL b
+        where a.MODULE_CODE = b.MODULE_CODE
+        <if test="null != subjectCode and '' != subjectCode">
+            and a.SUBJECT_CODE = #{subjectCode}
+        </if>
+    </select>
+
     <!--获取指标信息-->
     <select id="getKpiInfo" parameterType="java.lang.String" resultType="java.util.HashMap">
-        select t.KPI_FULL_NAME,t.UNIT,t.UATIO,t.FORMAT from DMCODE_COMP_KPI_MAPPING t
+        select t.KPI_FULL_NAME,case t.UNIT when '万元' then '元' when '万户' then '户' else t.UNIT end "UNIT",
+        t.UATIO,t.FORMAT from DMCODE_COMP_KPI_MAPPING t
         where 1 = 1
         <if test="null != kpiCode and kpiCode != ''">
             and t.KPI_CODE=#{kpiCode}

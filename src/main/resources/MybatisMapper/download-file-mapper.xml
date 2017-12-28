@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bonc.dw3.mapper.DownloadFileMapper">
+
+    <!-- 字段匹配 -->
+    <resultMap id="DownloadFileResult" type="com.bonc.dw3.entity.DownloadFile" >
+
+        <result property="filePath" column="FILE_PATH" jdbcType="VARCHAR"/>
+        <result property="subjectName" column="SUBJECT_NAME" jdbcType="VARCHAR"/>
+        <result property="fileDate" column="FILE_DATE" jdbcType="VARCHAR"/>
+        <result property="dimensionName" column="DIMENSION_NAME" jdbcType="VARCHAR"/>
+        <result property="downloadTime" column="DOWNLOAD_TIME" jdbcType="VARCHAR"/>
+        <result property="isAvailable" column="IS_AVAILABLE" jdbcType="VARCHAR"/>
+        <result property="fileId" column="FILE_ID" jdbcType="VARCHAR"/>
+        <result property="userId" column="USER_ID" jdbcType="VARCHAR"/>
+
+    </resultMap>
+
+    <!--FILE_ID,FILE_PATH,FILE_DATE,SUBJECT_NAME,DIMENSION_NAME,DOWNLOAD_TIME,IS_AVAILABLE,USER_ID-->
+    <select id="getFileByUserId" parameterType="String" resultMap="DownloadFileResult">
+        select * from DW_NEWQUERY_DOWNLOAD_FILE_INFO where 1 = 1
+        <if test="null != userId and userId != ''">
+            and USER_ID=#{userId}
+        </if>
+    </select>
+
+    <select id="getFileByFileId" parameterType="String" resultMap="DownloadFileResult">
+        select * from DW_NEWQUERY_DOWNLOAD_FILE_INFO where 1 = 1
+        <if test="null != fileId and fileId != ''">
+            and FILE_ID=#{fileId}
+        </if>
+    </select>
+
+    <insert id="addFile" parameterType="com.bonc.dw3.entity.DownloadFile">
+        insert into DW_NEWQUERY_DOWNLOAD_FILE_INFO(FILE_ID,FILE_PATH,FILE_DATE,SUBJECT_NAME,DIMENSION_NAME,DOWNLOAD_TIME,IS_AVAILABLE,USER_ID)
+        values (#{fileId},#{filePath},#{fileDate},#{subjectName},#{dimensionName},#{downloadTime},#{isAvailable},#{userId})
+    </insert>
+
+    <!--获取最大账期，分情况-->
+    <select id="getMaxDate" parameterType="java.lang.String" resultType="java.lang.String">
+        select
+        <choose>
+            <when test=' null != dateType and "" != dateType and dateType == "1" '>
+                distinct max(to_char(to_date(MAXDATE, 'yyyymmdd'), 'yyyy-mm-dd')) MAXDATE from DW_NEWQUERY_SUBJECT_MAXDATE
+                where LABEL_TYPE='D' and 1 = 1
+            </when>
+            <when test=' null != dateType and "" != dateType and dateType == "2" '>
+                distinct max(to_char(to_date(MAXDATE, 'yyyymm'), 'yyyy-mm')) MAXDATE from DW_NEWQUERY_SUBJECT_MAXDATE
+                where LABEL_TYPE='M' and 1 = 1
+            </when>
+        </choose>
+        <if test=" null != markType and markType != '' ">
+            and SUBJECT_CODE = #{markType,jdbcType=VARCHAR}
+        </if>
+    </select>
+
+    <select id="getSubjectNameByCode" parameterType="java.lang.String" resultType="java.lang.String">
+        select SUBJECT_NAME from DW_NEWQUERY_SUBJECT where 1 = 1
+        <if test='null != subjectCode and "" != subjectCode '>
+            and SUBJECT_CODE = #{subjectCode,jdbcType=VARCHAR}
+        </if>
+    </select>
+</mapper>
